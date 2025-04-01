@@ -3,20 +3,27 @@
 #include <Arduino.h>
 #include "key_table.h"  // key_table.hをインクルード
 #include <EEPROM.h>
-#include <SoftwareSerial.h>
 
 #define EEPROM_SIZE 1024  // EEPROMのサイズ（バイト単位）、ESP32で必要
 
-// ソフトウェアシリアルのTX/RXピンの設定
-#define RX_PIN 16    // 受信ピン
-#define TX_PIN 17    // 送信ピン
 
-// SoftwareSerialオブジェクトの作成
-SoftwareSerial softSerial(RX_PIN, TX_PIN);
+//TX2(GPIO17)とRX2(GPIO16)のハードウェアシリアルを使う
+//HardwareSerial Serial2(2);
 
-const int ledPin = 2;  // LEDが接続されているピン番号
+
+const int LED = 2;  // LEDが接続されているピン番号
 uint8_t boot_eeprom_address_L = 0; // EEPROMのアドレス、下位
 uint8_t boot_eeprom_address_H= 1; // EEPROMのアドレス、上位
+
+
+// XOR鍵（任意の値を使用）
+const byte XOR_KEY = 0x55;  // 例: 0x55のバイトを鍵として使用
+
+// 暗号化関数
+byte xorEncryptDecrypt(byte input) {
+  return input ^ XOR_KEY;  // XOR演算
+}
+
 
 //ブート毎にEEPROMにブート回数をカウントする。
 //1023までいったら0にリセット
@@ -70,17 +77,16 @@ void bootCounter_read(){
 
 void setup() {
   Serial.begin(115200);      // シリアル通信の初期化
-  pinMode(ledPin, OUTPUT); // LEDピンを出力モードに設定
+  Serial2.begin(115200);    //TX2(GPIO17)とRX2(GPIO16)のハードウェアシリアルを使う
+
+  pinMode(LED, OUTPUT); // LEDピンを出力モードに設定
   // EEPROMの初期化、ESP32で必要
   EEPROM.begin(EEPROM_SIZE);
-
-  // ソフトウェアシリアル通信を初期化
-  softSerial.begin(115200);  // ボーレートは必要に応じて変更
-
 }
 
 //Serial.println(key_table[i]);
 void loop() {
+  //Serial2.print("ON\n");
   delay(1000);
   bootCounter();  //ブート回数をEEPROMに保存
   //bootCounter_read(); //EEPROMのブート回数を表示する
@@ -88,7 +94,36 @@ void loop() {
   while(1){
     bootCounter_read(); //EEPROMのブート回数を表示する
 
-    softSerial.write("Soft Serial Test\n");
+
+    //起動回数＋起動回数を反転⇢XORで暗号化
+
+    static uint8_t originalData = 0;
+
+    originalData += 1;
+
+    uint8_t notData = ~originalData;  //NOTで反転
+
+    // 暗号化
+    byte encryptedData = xorEncryptDecrypt(originalData);
+
+    // 復号化
+    byte decryptedData = xorEncryptDecrypt(encryptedData);
+
+    Serial.print("originalData: ");
+    Serial.println(originalData);
+
+    Serial.print("notData: ");
+    Serial.println(notData);
+
+    Serial.print("encryptedData: ");
+    Serial.println(encryptedData);
+
+    Serial.print("decryptedData: ");
+    Serial.println(decryptedData);
+    
+
+
+
     delay(1000);
   }
 }

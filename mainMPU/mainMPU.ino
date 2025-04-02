@@ -6,6 +6,10 @@
 
 #define EEPROM_SIZE 1024  // EEPROMのサイズ（バイト単位）、ESP32で必要
 
+#define AUTH_STATUS_OK 1
+#define AUTH_STATUS_FAIL 0
+
+
 
 //TX2(GPIO17)とRX2(GPIO16)のハードウェアシリアルを使う
 //HardwareSerial Serial2(2);
@@ -29,12 +33,10 @@ byte xorEncryptDecrypt(byte input) {
 //1023までいったら0にリセット
 void bootCounter(){
   // EEPROMから2バイト読み込む
-  Serial.print("1\n");
   byte lowByte = EEPROM.read(boot_eeprom_address_L);  // 下位バイト
   byte highByte = EEPROM.read(boot_eeprom_address_H); // 上位バイト
 
   // 16ビット値を結合
-  Serial.print("3\n");
   uint16_t boot_eeprom_counter = (highByte << 8) | lowByte;
 
   if(boot_eeprom_counter >= 1023){
@@ -42,22 +44,23 @@ void bootCounter(){
   }else{
     boot_eeprom_counter += 1;
   }
+  
+  Serial.print("boot_eeprom_counter : ");
+  Serial.println(boot_eeprom_counter, DEC);
+
+  Serial.print("key_table[boot_eeprom_counter] : ");
+  Serial.println(key_table[boot_eeprom_counter], DEC);
 
   // 上位バイトと下位バイトに分けてEEPROMに保存
-  Serial.print("3\n");
   byte lowByteNew = boot_eeprom_counter & 0xFF; // 下位バイト
   byte highByteNew = (boot_eeprom_counter >> 8) & 0xFF; // 上位バイト
 
   // 新しい値をEEPROMに保存
-  Serial.print("4\n");
   EEPROM.write(boot_eeprom_address_L, lowByteNew);  // 下位バイト
   EEPROM.write(boot_eeprom_address_H, highByteNew); // 上位バイト
 
   // EEPROMへの書き込みを確定
   EEPROM.commit();
-
-  Serial.print("5\n");
-
 }
 
 //EEPROMの内容をシリアルに送信
@@ -71,7 +74,36 @@ void bootCounter_read(){
 
   // 確認のため読み出した値をシリアルモニタに表示
   Serial.print("boot counter value: ");
-  Serial.println(boot_eeprom_counter);
+  Serial.println(boot_eeprom_counter, DEC);
+
+  //Serial.print("key_table[boot_eeprom_counter] : ");
+  //Serial.println(key_table[boot_eeprom_counter], DEC);  
+}
+
+
+
+//ブート回数をセキュリティチップに送信
+void boot_count_tx(){
+  // EEPROMから2バイト読み込む
+  byte lowByte = EEPROM.read(boot_eeprom_address_L);  // 下位バイト
+  //byte highByte = EEPROM.read(boot_eeprom_address_H); // 上位バイト
+
+  // 16ビット値を結合
+  //uint16_t boot_eeprom_counter = (highByte << 8) | lowByte;
+
+  //Serial2.print(lowByte);
+  Serial2.write(0xAA);
+}
+
+
+uint16_t securityChip_rev(){
+  // データが受信されるまで待機
+  while (Serial2.available() == 0) {
+  }
+  
+  // 受信したデータを戻り値にする
+  return Serial2.read();
+
 }
 
 
@@ -86,44 +118,61 @@ void setup() {
 
 //Serial.println(key_table[i]);
 void loop() {
+
   //Serial2.print("ON\n");
   delay(1000);
   bootCounter();  //ブート回数をEEPROMに保存
   //bootCounter_read(); //EEPROMのブート回数を表示する
 
-  while(1){
-    bootCounter_read(); //EEPROMのブート回数を表示する
+  // 暗号化
+  byte lowByte = EEPROM.read(boot_eeprom_address_L);  // 下位バイト
+  byte encryptedData = xorEncryptDecrypt(lowByte);
+  Serial2.write(encryptedData); //暗号化したブート回数を送信する
 
+  //boot_count_tx();  //ブート回数をシリアルで送信
 
-    //起動回数＋起動回数を反転⇢XORで暗号化
+  uint16_t securityChip_data = securityChip_rev();
+  //Serial.println(securityChip_data, HEX); //MPUから受信したデータをそのまま返す
 
-    static uint8_t originalData = 0;
+  // 復号化
+  byte decryptedData = xorEncryptDecrypt(securityChip_data);
 
-    originalData += 1;
-
-    uint8_t notData = ~originalData;  //NOTで反転
-
-    // 暗号化
-    byte encryptedData = xorEncryptDecrypt(originalData);
-
-    // 復号化
-    byte decryptedData = xorEncryptDecrypt(encryptedData);
-
-    Serial.print("originalData: ");
-    Serial.println(originalData);
-
-    Serial.print("notData: ");
-    Serial.println(notData);
-
-    Serial.print("encryptedData: ");
-    Serial.println(encryptedData);
-
-    Serial.print("decryptedData: ");
-    Serial.println(decryptedData);
-    
+  Serial.print("decryptedData : ");
+  Serial.println(decryptedData, DEC);
 
 
 
-    delay(1000);
+  //セキュリティ認証の状態
+  int AUTH_STATUS; 
+  //セキュリティチップから送られてくるデータは、ブート回数をkey_tableで参照してその値が戻ってくるので、
+  //メインMPUのkey_table[ブート回数]　== セキュリティチップから戻ってきたデータを復号化したデータにする
+  if(decryptedData == key_table[lowByte]){
+    AUTH_STATUS = AUTH_STATUS_OK;
+  }else{
+    AUTH_STATUS = AUTH_STATUS_FAIL;
   }
+
+  //セキュリティ認証OK
+  while(AUTH_STATUS == AUTH_STATUS_OK){
+    Serial.println("AUTH_STATUS_OK");
+    digitalWrite(LED,0);
+    delay(500);
+    digitalWrite(LED,1);
+    delay(500);
+    while(1){      
+    }
+  }
+
+  //セキュリティ認証FAIL
+  while(AUTH_STATUS == AUTH_STATUS_FAIL){
+    Serial.println("AUTH_STATUS_FAIL");
+    digitalWrite(LED,0);
+    delay(100);
+    digitalWrite(LED,1);
+    delay(100);
+    while(1){      
+    }
+  }
+
+
 }

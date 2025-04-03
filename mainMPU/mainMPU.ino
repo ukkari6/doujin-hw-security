@@ -91,8 +91,9 @@ void boot_count_tx(){
   // 16ビット値を結合
   //uint16_t boot_eeprom_counter = (highByte << 8) | lowByte;
 
-  //Serial2.print(lowByte);
-  Serial2.write(0xAA);
+  // 暗号化
+  byte encryptedData = xorEncryptDecrypt(lowByte);
+  Serial2.write(encryptedData); //暗号化したブート回数を送信する
 }
 
 
@@ -107,6 +108,24 @@ uint16_t securityChip_rev(){
 }
 
 
+//セキュリティ認証の検証
+int check_securityKey(byte decryptedData){
+
+  //EEPROMからブート回数を読み出す
+  byte lowByte = EEPROM.read(boot_eeprom_address_L);  // 下位バイト
+
+  //セキュリティチップから送られてくるデータは、ブート回数をkey_tableで参照してその値が戻ってくるので、
+  //メインMPUのkey_table[ブート回数]　== セキュリティチップから戻ってきたデータを復号化したデータにする
+  if(decryptedData == key_table[lowByte]){
+    return(AUTH_STATUS_OK);
+  }else{
+    return(AUTH_STATUS_FAIL);
+  }
+
+  return(AUTH_STATUS_FAIL);
+}
+
+
 void setup() {
   Serial.begin(115200);      // シリアル通信の初期化
   Serial2.begin(115200);    //TX2(GPIO17)とRX2(GPIO16)のハードウェアシリアルを使う
@@ -116,62 +135,40 @@ void setup() {
   EEPROM.begin(EEPROM_SIZE);
 }
 
-//Serial.println(key_table[i]);
+
 void loop() {
 
-  //Serial2.print("ON\n");
   delay(1000);
   bootCounter();  //ブート回数をEEPROMに保存
-  //bootCounter_read(); //EEPROMのブート回数を表示する
 
-  // 暗号化
-  byte lowByte = EEPROM.read(boot_eeprom_address_L);  // 下位バイト
-  byte encryptedData = xorEncryptDecrypt(lowByte);
-  Serial2.write(encryptedData); //暗号化したブート回数を送信する
+  boot_count_tx();  //ブート回数の暗号化とセキュリティチップへ送信
 
-  //boot_count_tx();  //ブート回数をシリアルで送信
+  uint16_t securityChip_data = securityChip_rev();  //セキュリティチップから暗号化されたキーコードを受信
 
-  uint16_t securityChip_data = securityChip_rev();
-  //Serial.println(securityChip_data, HEX); //MPUから受信したデータをそのまま返す
-
-  // 復号化
+  //キーコードの復号化
   byte decryptedData = xorEncryptDecrypt(securityChip_data);
 
-  Serial.print("decryptedData : ");
-  Serial.println(decryptedData, DEC);
-
-
-
   //セキュリティ認証の状態
-  int AUTH_STATUS; 
-  //セキュリティチップから送られてくるデータは、ブート回数をkey_tableで参照してその値が戻ってくるので、
-  //メインMPUのkey_table[ブート回数]　== セキュリティチップから戻ってきたデータを復号化したデータにする
-  if(decryptedData == key_table[lowByte]){
-    AUTH_STATUS = AUTH_STATUS_OK;
-  }else{
-    AUTH_STATUS = AUTH_STATUS_FAIL;
-  }
+  //復号化したキーコードとメインMPUが持っているキーコードテーブルを認証する
+  int AUTH_STATUS = check_securityKey(decryptedData);
+
 
   //セキュリティ認証OK
   while(AUTH_STATUS == AUTH_STATUS_OK){
     Serial.println("AUTH_STATUS_OK");
     digitalWrite(LED,0);
-    delay(500);
+    delay(900);
     digitalWrite(LED,1);
-    delay(500);
-    while(1){      
-    }
+    delay(100);
   }
 
   //セキュリティ認証FAIL
   while(AUTH_STATUS == AUTH_STATUS_FAIL){
     Serial.println("AUTH_STATUS_FAIL");
     digitalWrite(LED,0);
-    delay(100);
+    delay(90);
     digitalWrite(LED,1);
-    delay(100);
-    while(1){      
-    }
+    delay(10);
   }
 
 

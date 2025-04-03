@@ -15,36 +15,6 @@ byte xorEncryptDecrypt(byte input) {
 }
 
 
-//ブート毎にEEPROMにブート回数をカウントする。
-//1023までいったら0にリセット
-void bootCounter(){
-
-}
-
-//EEPROMの内容をシリアルに送信
-void bootCounter_read(){
-  // EEPROMから2バイト読み込む
-
-  // 16ビット値を結合
-  //uint16_t boot_eeprom_counter = (highByte << 8) | lowByte;
-
-  // 確認のため読み出した値をシリアルモニタに表示
-  Serial.print("boot counter value: ");
-}
-
-
-
-//ブート回数をセキュリティチップに送信
-void boot_count_tx(){
-  // EEPROMから2バイト読み込む
-  //byte highByte = EEPROM.read(boot_eeprom_address_H); // 上位バイト
-
-  // 16ビット値を結合
-  //uint16_t boot_eeprom_counter = (highByte << 8) | lowByte;
-
-  //Serial2.print(lowByte);
-}
-
 //MPUから暗号化されたブート回数を受け取る
 uint8_t mpu_rev(){
   // データが受信されるまで待機
@@ -65,7 +35,6 @@ void setup() {
 
 
 void loop() {
-  //Serial2.print("ON\n");
   delay(100);
 
   while(1){

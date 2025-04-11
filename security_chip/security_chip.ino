@@ -7,7 +7,7 @@
 const int LED = 13;  // LEDが接続されているピン番号
 
 // XOR鍵（任意の値を使用）
-const uint16_t XOR_KEY = 0x9988;  // 例: 0x9988のバイトを鍵として使用
+const uint16_t XOR_KEY = 0x99;  // 例: 0x9988のバイトを鍵として使用
 
 // 暗号化関数
 uint16_t xorEncryptDecrypt(uint16_t input) {
@@ -21,29 +21,9 @@ uint16_t mpu_rev(){
   while (Serial.available() == 0) {
   }
   //下位バイトを受信
-  uint8_t lowByte =  Serial.read();
+  uint8_t value =  Serial.read();
 
-
-  // データが受信されるまで待機
-  while (Serial.available() == 0) {
-  }
-  //下位バイトを受信
-  uint8_t highByte =  Serial.read();
-
-
-  //Serial.print("lowByte = ");
-  //Serial.println(lowByte);
-
-  //Serial.print("highByte = ");
-  //Serial.println(highByte);
-
-
-  // 16ビット値を結合
-  uint16_t serialChip_data = (highByte << 8) | lowByte;
-
-  //Serial.print("serialChip_data = ");
-  //Serial.println(serialChip_data, DEC);
-  return serialChip_data;
+  return value;
 }
 
 
@@ -56,7 +36,7 @@ void mpu_send(uint16_t mpu_data){
   //Serial.println(decryptedData, DEC);
 
   //キーテーブルの値を表示
-  uint16_t tx = key_table[decryptedData];
+  //uint16_t tx = key_table[decryptedData];
   //Serial.print("tx = ");
   //Serial.println(tx, DEC);
 
@@ -65,17 +45,7 @@ void mpu_send(uint16_t mpu_data){
   //Serial.print("keytable_xor = ");
   //Serial.println(keytable_xor, DEC);
 
-  uint8_t low = keytable_xor & 0xFF;
-  uint8_t high = (keytable_xor >> 8) & 0xFF;
-  //Serial.print("low = ");
-  //Serial.println(low, DEC);
-  //Serial.print("high = ");
-  //Serial.println(high, DEC);
-
-
-  //下位、上位の順番で送信
-  Serial.write(low);
-  Serial.write(high);
+  Serial.write(keytable_xor);
 }
 
 
@@ -83,7 +53,6 @@ void mpu_send(uint16_t mpu_data){
 
 void setup() {
   Serial.begin(115200);      // シリアル通信の初期化
-
   pinMode(LED, OUTPUT); // LEDピンを出力モードに設定
 }
 

@@ -1,28 +1,25 @@
 //疑似セキュリティチップ、Arduino Uno
 
 #include <Arduino.h>
-#include "key_table.h"  // key_table.hをインクルード
-
+#include "key_table.h"  //キーコードの入ったテーブルデータ[1024]
 
 const int LED = 13;  // LEDが接続されているピン番号
 
-// XOR鍵（任意の値を使用）
-const uint16_t XOR_KEY = 0x99;  // 例: 0x9988のバイトを鍵として使用
+// XORキー
+const uint16_t XOR_KEY = 0x99;  //プロジェクトによってXORキーは変更する、セキュリティチップとは同じ値にすること
 
 // 暗号化関数
 uint16_t xorEncryptDecrypt(uint16_t input) {
   return input ^ XOR_KEY;  // XOR演算
 }
 
-
 //MPUから暗号化されたブート回数を受け取る
 uint16_t mpu_rev(){
   // データが受信されるまで待機
   while (Serial.available() == 0) {
   }
-  //下位バイトを受信
-  uint8_t value =  Serial.read();
 
+  uint8_t value =  Serial.read();
   return value;
 }
 
